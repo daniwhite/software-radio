@@ -1,5 +1,5 @@
 import pickle
-import numpy
+import numpy as np
 from wav_utils import *
 from numpy.fft import fft, ifft
 
