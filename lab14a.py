@@ -9,13 +9,13 @@ TIMESTEP = 1e-7  # sec
 TOTAL_TIME = 10  # sec
 MAX_FREQ = 5e3  # Hz
 WAV_SR = 44100  # Hz
+CAR_FREQS = np.arange(560e3, 800e3, 10e3)  # all in hz
 
 ## Parameters that can be changed from run to run
 # length of time analyzed, in seconds (TOTAL_TIME is whole song)
 ANALYSIS_TIME = TOTAL_TIME
 TIMES = np.arange(0, ANALYSIS_TIME, TIMESTEP)
 ANALYSIS_INDX = len(TIMES)
-CAR_FREQ = 560e3  # carrier frequency in Hz
 
 
 def zoh(sig, old_period, new_period):
@@ -47,29 +47,29 @@ def lo_pass(sig, cutoff, timestep):
     return np.abs(ifft(freq_sig))
     
 
-def demod(sig):
+def demod(sig, car_freq):
     """
     Synchronous demodulation (see lec slides 20-22)
 
     sig -- numpy array of d(t)
     """
 
-    cosines = np.cos(2 * np.pi * CAR_FREQ * TIMES)
+    cosines = np.cos(2 * np.pi * car_freq * TIMES)
     sig = cosines * sig
 
     return lo_pass(sig, MAX_FREQ, TIMESTEP)
 
 
 with open('signal.pkl', 'rb') as f:
-    start_time = time.time()
     signal = pickle.load(open('signal.pkl', 'rb'))
-    wav_write(signal, int(1/TIMESTEP), "orig.wav")
-    sig = signal[:ANALYSIS_INDX]
-  
-    sig = demod(sig)
+    trunc_sig = signal[:ANALYSIS_INDX]
 
-    sig = zoh(sig, TIMESTEP, 1/WAV_SR)
+    for car_freq in CAR_FREQS:
+        sig = trunc_sig[:]
+        start_time = time.time()
+        sig = demod(sig, car_freq)
+        sig = zoh(sig, TIMESTEP, 1/WAV_SR)
 
-    wav_write(sig, WAV_SR, "out.wav")
-    end_time = time.time()
-    print(end_time - start_time)
+        wav_write(sig, WAV_SR, "song_{}khz.wav".format(int(car_freq/1000)))
+        end_time = time.time()
+        print("Time for {} Hz: {}".format(car_freq, end_time - start_time))
