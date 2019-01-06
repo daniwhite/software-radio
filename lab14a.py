@@ -2,19 +2,31 @@ import pickle
 import numpy as np
 from wav_utils import *
 from numpy.fft import fft, ifft
+import time
 
-# Parameters determined by lab
+## Parameters determined by lab
 TIMESTEP = 1e-7  # sec
 TOTAL_TIME = 10  # sec
 MAX_FREQ = 5e3  # Hz
 WAV_SR = 44100  # Hz
 
-# Parameters that can be changed from run to run
+## Parameters that can be changed from run to run
 # length of time analyzed, in seconds (TOTAL_TIME is whole song)
-ANALYSIS_TIME = 1
+ANALYSIS_TIME = TOTAL_TIME
 TIMES = np.arange(0, ANALYSIS_TIME, TIMESTEP)
 ANALYSIS_INDX = len(TIMES)
 CAR_FREQ = 560e3  # carrier frequency in Hz
+
+
+def zoh(sig, old_period, new_period):
+    """Periods are in seconds."""
+    new_len = int(len(sig) * old_period / new_period)
+    ret = np.zeros(new_len)
+
+    for ret_indx in range(new_len):
+      sig_indx = int(ret_indx * new_period / old_period)
+      ret[ret_indx] = sig[sig_indx]
+    return ret
 
 
 def lo_pass(sig, cutoff, timestep):
@@ -30,10 +42,9 @@ def lo_pass(sig, cutoff, timestep):
     # cutoff * len(sig) / sampling_freq, and sampling_freq = 1 / timestep
     # Also the units work out
     cutoff_indx = int(cutoff * len(sig) * timestep)
-    print("Signal len: {}, timestep: {}, index: {}".format(len(sig), timestep, cutoff_indx))
 
     freq_sig[cutoff_indx:] = 0
-    sig = ifft(freq_sig)
+    return np.abs(ifft(freq_sig))
     
 
 def demod(sig):
@@ -46,15 +57,19 @@ def demod(sig):
     cosines = np.cos(2 * np.pi * CAR_FREQ * TIMES)
     sig = cosines * sig
 
-    # CAR_FREQ is a good a cutoff as any, given that it should scale with the
-    # carrier frequency anyway
-    lo_pass(sig, CAR_FREQ, TIMESTEP)
+    return lo_pass(sig, MAX_FREQ, TIMESTEP)
 
 
 with open('signal.pkl', 'rb') as f:
+    start_time = time.time()
     signal = pickle.load(open('signal.pkl', 'rb'))
+    wav_write(signal, int(1/TIMESTEP), "orig.wav")
     sig = signal[:ANALYSIS_INDX]
-    
-    demod(sig)
+  
+    sig = demod(sig)
+
+    sig = zoh(sig, TIMESTEP, 1/WAV_SR)
 
     wav_write(sig, WAV_SR, "out.wav")
+    end_time = time.time()
+    print(end_time - start_time)
